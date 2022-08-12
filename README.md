@@ -1,0 +1,2 @@
+# IntZip
+Lossless Integer Compression
