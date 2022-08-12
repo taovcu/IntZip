@@ -15,6 +15,7 @@ class BitStream:
         v = v & ((1<<n) - 1)
         self.value  += (v << self.nbbit)
         self.nbbit += n
+        #self.dump()
 
 
 
@@ -26,19 +27,20 @@ class BitStream:
         ret = (self.value >> (self.nbbit -n))
         self.nbbit -= n
         self.value = (self.value & ((1<<self.nbbit) - 1))
+        #self.reload()
         return ret
 
-    def dump(self, n):
+    def dump(self):
         if self.nbbit >= 64:
             try:
                 v = self.value & ((1<<64) -1)
                 self.pool.append(v)
-                self.nbbit -= 64
                 self.value = self.value >> 64
+                self.nbbit -= 64
             except:
                 pass
 
-    def reload(self, n):
+    def reload(self):
         if self.nbbit < 20:
             try:
                 v = self.pool.pop()

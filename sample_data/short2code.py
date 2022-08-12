@@ -16,7 +16,7 @@ s2c_dict = {
             -512: [39,9], -1024:[38,10], -2048:[37,11], -4096:[36,12],
             -48: [43,4], -64:[42,6], -128:[41,7], -256:[40,8],
             -24: [47,2], -28:[46,2], -32:[45,3], -40:[44,3],
-            -16: [51,1], -18:[50,1], -20:[49,1], 22:[48,1],
+            -16: [51,1], -18:[50,1], -20:[49,1], -22:[48,1],
             -12: [55,0], -13:[54,0], -14:[53,0], -15:[52,0],
             -8: [59,0], -9:[58,0], -10:[57,0], -11:[56,0],
             -4: [63,0], -5:[62,0], -6:[61,0], -7:[60,0],
@@ -39,7 +39,7 @@ c2s_dict = {
             39:[-512,9], 38:[-1024,10], 37:[-2048,11], 36:[-4096,12],
             43:[-48,4], 42:[-64,6], 41:[-128,7], 40:[-256,8],
             47:[-24,2], 46:[-28,2], 45:[-32,3], 44:[-40,3],
-            51:[-16,1], 50:[-18,1], 49:[-20,1], 48:[22,1],
+            51:[-16,1], 50:[-18,1], 49:[-20,1], 48:[-22,1],
             55:[-12,0], 54:[-13,0], 53:[-14,0], 52:[-15,0],
             59:[-8,0], 58:[-9,0], 57:[-10,0], 56:[-11,0],
             63:[-4,0], 62:[-5,0], 61:[-6,0], 60:[-7,0],
@@ -52,6 +52,13 @@ sorted_keys = sorted(s2c_dict)
 bs = bt.BitStream(0,0)
 global MD
 MD = 0
+
+debug_level = 0
+
+def print_debug(*args):
+    if debug_level:
+        print(*args)
+
 
 def short2code(s):
     global MD
@@ -86,24 +93,26 @@ def compress(f):
         fcode = open(f + '.code', 'wb')
         fbits = open(f + '.bstream', 'wb')
         for i in range((len(txt_bin) // 2)):
-            #print(i, "unpack {}-{} bytes".format(i*2, i*2+1))
+            #print_debug(i, "unpack {}-{} bytes".format(i*2, i*2+1))
             s = struct.unpack("<H", txt_bin[i*2:i*2+2])[0]
             s_list.append(s)
         
-        #print("s_list len", len(s_list))
+        #print_debug("s_list len", len(s_list))
     
         md = (max(s_list) + 1) // 2
+        print_debug(md)
         MD = md
         s2c_dict[-MD] = [67,0]
         c2s_dict[67] = [-MD, 0]
     
     
-        for s in s_list:
+        for i in range(len(s_list)):
+            s = s_list[i]
             s = s - MD
             cb = short2code(s)
-            #print(s+MD, s, cb)
+            #print_debug(s+MD, s, cb)
             if not cb:
-                print("Value error: {} cannot be covered by the table".format(s))
+                print_debug("Value error: {} cannot be covered by the table".format(s))
                 sys.exit(1)
     
             bits_v = 0
@@ -117,7 +126,7 @@ def compress(f):
             total_bits += cb[1]
             fcode.write(cb[0].to_bytes(1, 'big'))
             bs.push(bits_v, cb[1])
-            print("encode: code = {}, nbv = {} = {} bits".format(cb[0], bits_v, cb[1]))
+            print_debug("{}th encode: value={}, code = {}, nbv = {} = {} bits".format(i, s + MD, cb[0], bits_v, cb[1]))
     
     
         # bitstream file include 4 byte header for nbbits
@@ -128,12 +137,12 @@ def compress(f):
     
         fcode.close()
         fbits.close()
-        print("bitstream nbbits = {}".format(bs.nbbit))
-        print("nbbits = {}, = {} bytes".format(total_bits, (total_bits+7)//8))
-        print("input file size {}".format(os.path.getsize(f)))
+        print_debug("bitstream nbbits = {}".format(bs.nbbit))
+        print_debug("nbbits = {}, = {} bytes".format(total_bits, (total_bits+7)//8))
+        print_debug("input file size {}".format(os.path.getsize(f)))
         os.system("~/git/FiniteStateEntropy/fse -f {}".format(f+".code"))
-        print("compressed code file size {}".format(os.path.getsize(f + '.code.fse')))
-        print("bitstream file size {}".format(os.path.getsize(f + '.bstream')))
+        print_debug("compressed code file size {}".format(os.path.getsize(f + '.code.fse')))
+        print_debug("bitstream file size {}".format(os.path.getsize(f + '.bstream')))
 
 
         # decompress validation
@@ -153,24 +162,33 @@ def compress(f):
                 s = int(code_bin[i])
                 code_list.append(s)
 
-        print(code_list)
+        print_debug(code_list)
         for i in range(val_len):
             code = code_list.pop()
-            #print("code:", code)
+            print_debug("code:", code)
             base = c2s_dict[code][0]
-            #print("base:", base)
+            print_debug("base:", base)
             bitv = bs_decode.pop(c2s_dict[code][1])
-            #print("restroed:", base + bitv + MD)
-            orig_list.insert(0, base + bitv + MD)
+            print_debug("nbbits:", c2s_dict[code])
+            print_debug("bitv:", bitv)
+            print_debug("restroed:", base + bitv + MD)
+            if base < 0:
+                orig_list.insert(0, base - bitv + MD)
+            else:
+                orig_list.insert(0, base + bitv + MD)
 
+            print_debug("{}th decode: value={}, code = {}, nbv = {} = {} bits".format(val_len-1-i, base + bitv + MD, code, bitv, c2s_dict[code][1]))
+
+        print("{} --> {} bytes".format(os.path.getsize(f), os.path.getsize(f + '.code.fse')+os.path.getsize(f + '.bstream')))
         if orig_list == s_list:
             print("encode and decode PASS")
-            print("{} --> {} bytes".format(os.path.getsize(f), os.path.getsize(f + '.code.fse')+os.path.getsize(f + '.bstream')))
         else:
-            for i in range(len(s_list)):
+            i = len(s_list) - 1
+            while i>= 0:
                 if orig_list[i] != s_list[i]:
-                    print("Fail", i, "orig = {}, restored = {}".format(s_list[i], orig_list[i]))
+                    print_debug("Fail", i, "orig = {}, restored = {}".format(s_list[i], orig_list[i]))
                     sys.exit(1)
+                i -= 1
 
 
 compress(sys.argv[1])
