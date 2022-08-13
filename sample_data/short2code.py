@@ -86,12 +86,13 @@ def short2code(s):
 
 def compress(f):
     global MD
+    global bs
     with open(f, 'rb') as fp:
         s_list = []
         txt_bin = fp.read()
         total_bits = 0
         fcode = open(f + '.code', 'wb')
-        fbits = open(f + '.bstream', 'wb')
+        #fbits = open(f + '.bstream', 'wb')
         for i in range((len(txt_bin) // 2)):
             #print_debug(i, "unpack {}-{} bytes".format(i*2, i*2+1))
             s = struct.unpack("<H", txt_bin[i*2:i*2+2])[0]
@@ -131,28 +132,38 @@ def compress(f):
     
         # bitstream file include 4 byte header for nbbits
         # bitstream file include 2 byte header for MD value to handle 0
-        fbits.write(bs.nbbit.to_bytes(4, 'little'))
-        fbits.write(MD.to_bytes(2, 'little'))
-        fbits.write(bs.value.to_bytes((bs.nbbit+7)//8, 'little'))
+        #fbits.write(bs.nbbit.to_bytes(4, 'little'))
+        #fbits.write(MD.to_bytes(2, 'little'))
+        #fbits.write(bs.value.to_bytes((bs.nbbit+7)//8, 'little'))
+        bs.savefile(f + '.bstream')
     
         fcode.close()
-        fbits.close()
-        print_debug("bitstream nbbits = {}".format(bs.nbbit))
-        print_debug("nbbits = {}, = {} bytes".format(total_bits, (total_bits+7)//8))
         print_debug("input file size {}".format(os.path.getsize(f)))
         os.system("~/git/FiniteStateEntropy/fse -f {}".format(f+".code"))
         print_debug("compressed code file size {}".format(os.path.getsize(f + '.code.fse')))
         print_debug("bitstream file size {}".format(os.path.getsize(f + '.bstream')))
 
+        # assemble compressed file
+        # MD[2bytes] + FSE.bin + bstream.bin
+        with open (f + '.iz', 'wb') as fp:
+            fp.write(MD.to_bytes(2, 'little'))
+            ffse = open(f + '.code.fse', 'rb')
+            bf = ffse.read()
+            fbits = open(f + '.bstream', 'rb')
+            bs = fbits.read()
+            fp.write(MD.to_bytes(2, 'little'))
+            fp.write(bf)
+            fp.write(bs)
+            ffse.close()
+            fbits.close()
+
 
         # decompress validation
         orig_list = []
         os.system("~/git/FiniteStateEntropy/fse -d -f {}".format(f+".code.fse"))
-        with open(f+'.bstream', 'rb') as fp:
-            nbbit = int.from_bytes(fp.read(4), "little")
+        with open(f+'.iz', 'rb') as fp:
             MD = int.from_bytes(fp.read(2), "little")
-            val = int.from_bytes(fp.read(), "little")
-            bs_decode = bt.BitStream(val, nbbit)
+            bs_decode = bt.BitStream(f + '.bstream')
 
         val_len = os.path.getsize(f + '.code')
         with open(f+'.code', 'rb') as fp:
@@ -164,6 +175,7 @@ def compress(f):
 
         print_debug(code_list)
         for i in range(val_len):
+            print("decoding", i)
             code = code_list.pop()
             print_debug("code:", code)
             base = c2s_dict[code][0]
@@ -179,7 +191,7 @@ def compress(f):
 
             print_debug("{}th decode: value={}, code = {}, nbv = {} = {} bits".format(val_len-1-i, base + bitv + MD, code, bitv, c2s_dict[code][1]))
 
-        print("{} --> {} bytes".format(os.path.getsize(f), os.path.getsize(f + '.code.fse')+os.path.getsize(f + '.bstream')))
+        print("{} --> {} bytes".format(os.path.getsize(f), os.path.getsize(f + '.iz')))
         if orig_list == s_list:
             print("encode and decode PASS")
         else:
