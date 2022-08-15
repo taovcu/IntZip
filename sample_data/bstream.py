@@ -47,9 +47,9 @@ class BitStream:
         if self.nbbit < n:
             self.reload()
 
-        ret = (self.value >> (self.nbbit -n))
+        ret = (self.value & ((1<< self.nbbit) - (1<<(self.nbbit - n))))
         self.nbbit -= n
-        self.value = (self.value & ((1<<self.nbbit) - 1))
+        ret = ret >> self.nbbit
         return ret
 
     def dump(self):
@@ -65,16 +65,14 @@ class BitStream:
                 pass
 
     def reload(self):
-        #print("before relaod", bs2.value, bs2.nbbit, bs2.pool)
         # reload 4096 bit at a time
         try:
             for i in range(min(len(self.pool), 4096//64)):
                 v = self.pool.pop()
-                self.value = (self.value << 64) + v
+                self.value = ((self.value & ((1 << self.nbbit) - 1)) << 64) + v
                 self.nbbit += 64
         except:
             pass
-        #print("after relaod", bs2.value, bs2.nbbit, bs2.pool)
 
     def savefile(self, f):
         total_bits = self.nbbit + len(self.pool) * 64
@@ -87,7 +85,6 @@ class BitStream:
 
         
 """
-
 bs = BitStream(0,0)
 bs.push(255, 64)
 print("push 255, 64", bs.value, bs.nbbit, bs.pool)
@@ -106,18 +103,24 @@ bs.savefile("test.bstream")
 
 ##########################
 bs2 = BitStream("test.bstream", 0, 0)
-print("load bitstream", bs2.value, bs2.nbbit, bs2.pool)
+print("load bitstream", hex(bs2.value), bs2.nbbit, bs2.pool)
 v = bs2.pop(41)
-print(v, "expected to be 0")
+print("after pop 41", hex(bs2.value), bs2.nbbit, bs2.pool)
+print(hex(v), "expected to be 0")
 v = bs2.pop(16)
-print(v, "expected to be 0")
+print("after pop 16", hex(bs2.value), bs2.nbbit, bs2.pool)
+print(hex(v), "expected to be 0")
 v = bs2.pop(1)
-print(v, "expected to be 1")
+print("after pop 1", hex(bs2.value), bs2.nbbit, bs2.pool)
+print(hex(v), "expected to be 1")
 v = bs2.pop(7)
-print(v, "expected to be 127")
+print("after pop 7", hex(bs2.value), bs2.nbbit, bs2.pool)
+print(hex(v), "expected to be 127")
 v = bs2.pop(63)
-print(v, "expected to be 127")
+print("after pop 63", hex(bs2.value), bs2.nbbit, bs2.pool)
+print(hex(v), "expected to be 127")
 v = bs2.pop(1)
-print(v, "expected to be 1")
-print(bs2.value, bs2.nbbit, bs2.pool)
+print("after pop 1", hex(bs2.value), bs2.nbbit, bs2.pool)
+print(hex(v), "expected to be 1")
+print(hex(bs2.value), bs2.nbbit, bs2.pool)
 """
